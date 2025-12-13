@@ -3,7 +3,7 @@
 The main aim of this program is to create fully deterministic envirement and testing procedure for many
 different optimization algoritms.
 
-Source: [DARTHxMICHAEL/TabuSearchVRP](https://github.com/DARTHxMICHAEL/OptimizationAlgorithmsBenchmark)
+Source: [DARTHxMICHAEL/OptimizationAlgorithmsBenchmark](https://github.com/DARTHxMICHAEL/OptimizationAlgorithmsBenchmark)
 
 ## Instalation and basic use
 
