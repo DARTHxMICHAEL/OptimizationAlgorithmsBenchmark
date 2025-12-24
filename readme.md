@@ -48,7 +48,6 @@ In order to test optimization function we create fully deterministic 3D function
 
 Later we use **run_multiple_seeds** function that allow us to run multiple iterations of tests with different seeds each time, after which we summerize basic params such as sum, average, standard deviation or run times. This allows us to summerize and compare different optimization algoritmhs within the repeatable (deterministic) envirement.
 
-
 ## List of optimization algorithms
 
 The list of implemented optimization algorithms include:
@@ -66,3 +65,30 @@ The list of implemented optimization algorithms include:
 - **Differential Evolution (differential_evolution_max_search)** is a population-based global optimization algorithm designed for continuous search spaces. It evolves a population of candidate solutions by combining differences between randomly selected individuals to generate new trial solutions. Selection is greedy: a trial solution replaces its parent only if it achieves a better objective value. This mechanism enables efficient exploration of complex, multimodal landscapes while remaining relatively simple to tune. Differential Evolution does not require gradient information and performs well on noisy and non-convex problems. It is widely used in engineering and scientific optimization due to its robustness and strong empirical performance.
 
 - **CMA-ES (cma_es_max_search)** is an advanced evolutionary optimization algorithm that adapts the shape, scale, and orientation of its search distribution over time. Instead of relying on fixed mutation parameters, it learns correlations between variables by updating a covariance matrix based on successful samples. This allows CMA-ES to efficiently follow curved ridges and narrow optima in high-dimensional or ill-conditioned landscapes. The algorithm is particularly effective when gradients are unavailable or unreliable. While more computationally expensive than simpler methods, CMA-ES is often considered a state-of-the-art approach for continuous black-box optimization. It is frequently used as a benchmark reference due to its consistency and robustness.
+
+## Ranked composite score
+
+Each algorithm is evaluated across multiple independent runs and summarized
+using the following metrics:
+
+- Average (Avg): Mean of the best values found across runs. This is the primary
+  quality metric and represents expected performance. Higher is better.
+- Maximum (Max): Best value achieved in any run. This captures peak capability
+  and proximity to the global optimum. Higher is better.
+- Minimum (Min): Worst best-value across runs. This reflects reliability under
+  unlucky initialization. Higher is better.
+- Standard Deviation (Std): Measures variability across runs. Lower values
+  indicate more stable and predictable behavior.
+- Total Time: Total execution time across all runs. Lower values indicate
+  higher computational efficiency.
+
+A composite score is computed by normalizing each metric and combining them
+with weighted importance:
+- Mean performance (45%)
+- Best-case performance (15%)
+- Worst-case performance (10%)
+- Stability via coefficient of variation penalty (15%)
+- Computational efficiency (15%)
+
+Algorithms are ranked in descending order of this composite score, providing
+a balanced comparison between solution quality, robustness, and runtime cost.

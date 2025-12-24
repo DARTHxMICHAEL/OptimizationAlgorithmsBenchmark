@@ -305,13 +305,12 @@ def cma_es_max_search(f, domain, pop_size=20, generations=200, sigma=0.5, seed=0
 
 	return best[0], best[1], best_val
 
-
 # END OF OPTIMIZATION ALGORITHMS SECTION
 
 def run_multiple_seeds(optimizer, f, domain, runs=10):
 	"""
 	Run an optimizer multiple times with different seeds and summarize statistics.
-	Includes per-run timing and total timing (in seconds).
+	Returns a dictionary with aggregated performance and timing metrics.
 	"""
 	values = []
 	run_times = []
@@ -324,16 +323,19 @@ def run_multiple_seeds(optimizer, f, domain, runs=10):
 		t1 = time.perf_counter()
 
 		values.append(best_val)
-		run_times.append(t1 - t0) 
+		run_times.append(t1 - t0)
 
 	total_end = time.perf_counter()
 
-	# Summary stats
-	total = sum(values)
-	avg = total / runs
-	std = np.std(values)
-	vmin = min(values)
-	vmax = max(values)
+	total = float(np.sum(values))
+	avg = float(np.mean(values))
+	std = float(np.std(values))
+	vmin = float(np.min(values))
+	vmax = float(np.max(values))
+
+	fastest = float(np.min(run_times))
+	slowest = float(np.max(run_times))
+	total_time = float(total_end - total_start)
 
 	print("=== Multi-Run Summary ===")
 	print(f"Sum:           {total:.6f}")
@@ -343,11 +345,100 @@ def run_multiple_seeds(optimizer, f, domain, runs=10):
 	print(f"Max:           {vmax:.6f}")
 
 	print("\n=== Timing (seconds) ===")
-	#print(f"Per-run avg:   {np.mean(run_times):.6f} s")
-	#print(f"Per-run std:   {np.std(run_times):.6f} s")
-	print(f"Fastest run:   {np.min(run_times):.6f} s")
-	print(f"Slowest run:   {np.max(run_times):.6f} s")
-	print(f"Total time:    {total_end - total_start:.6f} s")
+	print(f"Fastest run:   {fastest:.6f} s")
+	print(f"Slowest run:   {slowest:.6f} s")
+	print(f"Total time:    {total_time:.6f} s")
+
+	return {
+		"sum": total,
+		"avg": avg,
+		"std": std,
+		"min": vmin,
+		"max": vmax,
+		"fastest": fastest,
+		"slowest": slowest,
+		"total_time": total_time
+	}
+
+
+def run_optimizer_benchmark(name, optimizer, f, domain, runs, results):
+	"""
+	Run a single optimization algorithm benchmark and store results.
+	"""
+	print(f"\n=== {name} MAX ===")
+	results[name] = run_multiple_seeds(optimizer, f, domain, runs)
+
+
+def print_final_comparison(results):
+	"""
+	Print a consolidated comparison table and a ranked composite score
+	across all optimization algorithms.
+	"""
+	print("\n================ FINAL ALGORITHM COMPARISON ================\n")
+
+	header = f"{'Algorithm':<28} {'Avg':>10} {'Std':>10} {'Min':>10} {'Max':>10} {'Total Time (s)':>16}"
+	print(header)
+	print("-" * len(header))
+
+	for name, r in results.items():
+		print(
+			f"{name:<28} "
+			f"{r['avg']:>10.4f} "
+			f"{r['std']:>10.4f} "
+			f"{r['min']:>10.4f} "
+			f"{r['max']:>10.4f} "
+			f"{r['total_time']:>16.4f}"
+		)
+
+	# ---------------- Composite score computation ----------------
+
+	# extract ranges for normalization
+	avgs = [r["avg"] for r in results.values()]
+	maxs = [r["max"] for r in results.values()]
+	mins = [r["min"] for r in results.values()]
+	stds = [r["std"] for r in results.values()]
+	times = [r["total_time"] for r in results.values()]
+
+	max_avg = max(avgs)
+	max_max = max(maxs)
+	max_min = max(mins)
+	max_std = max(stds)
+	max_time = max(times)
+
+	scored = []
+
+	for name, r in results.items():
+		# quality metrics (higher is better)
+		avg_score = r["avg"] / max_avg
+		max_score = r["max"] / max_max
+		min_score = r["min"] / max_min
+
+		# stability metric (lower is better)
+		cv = r["std"] / max(r["avg"], 1e-12)
+		stability_score = 1.0 - min(cv, 1.0)
+
+		# time metric (lower is better)
+		time_score = 1.0 - (r["total_time"] / max_time)
+
+		composite = (
+			0.45 * avg_score +
+			0.15 * max_score +
+			0.10 * min_score +
+			0.15 * stability_score +
+			0.15 * time_score
+		)
+
+		scored.append((name, composite, avg_score, stability_score, time_score))
+
+	scored.sort(key=lambda x: x[1], reverse=True)
+
+	print("\n================ RANKED COMPOSITE SCORE ====================")
+	for rank, (name, score, q, s, t) in enumerate(scored, start=1):
+		print(
+			f"{rank:>2}. {name:<25} "
+			f"Score={score:.4f} "
+			f"(Quality={q:.3f}, Stability={s:.3f}, Time={t:.3f})"
+		)
 
 
 def run_simulation(seed=0, n_terms=5, domain=50, step=0.01, runs=10):
@@ -389,33 +480,51 @@ def run_simulation(seed=0, n_terms=5, domain=50, step=0.01, runs=10):
 
 	brute_force_min_max_search(f, domain)
 
-	# hill climb optimization algorithm
-	print("\n=== Hill Climb MAX ===")
-	run_multiple_seeds(hill_climb_max_search, f, domain, runs)
+	results = {}
 
-	# hill climb with random restart optimization algorithm
-	print("\n=== Hill Climb Random Restart MAX ===")
-	run_multiple_seeds(random_restart_hill_climb_max_search, f, domain, runs)
+	run_optimizer_benchmark(
+		"Hill Climb",
+		hill_climb_max_search,
+		f, domain, runs, results
+	)
 
-	# momentum optimization algorithm
-	print("\n=== Momentum MAX ===")
-	run_multiple_seeds(momentum_max_search, f, domain, runs)
+	run_optimizer_benchmark(
+		"Hill Climb Random Restart",
+		random_restart_hill_climb_max_search,
+		f, domain, runs, results
+	)
 
-	# simulated annealing optimization algorithm
-	print("\n=== Simulated Annealing MAX ===")
-	run_multiple_seeds(simulated_annealing_max_search, f, domain, runs)
+	run_optimizer_benchmark(
+		"Momentum",
+		momentum_max_search,
+		f, domain, runs, results
+	)
 
-	# evolution strategy optimization algorithm
-	print("\n=== Evolution Strategy MAX ===")
-	run_multiple_seeds(evolution_strategy_max_search, f, domain, runs)
+	run_optimizer_benchmark(
+		"Simulated Annealing",
+		simulated_annealing_max_search,
+		f, domain, runs, results
+	)
 
-	# differential evolution optimization algorithm
-	print("\n=== Differential Evolution MAX ===")
-	run_multiple_seeds(differential_evolution_max_search, f, domain, runs)
+	run_optimizer_benchmark(
+		"Evolution Strategy",
+		evolution_strategy_max_search,
+		f, domain, runs, results
+	)
 
-	# cma-es optimization algorithm
-	print("\n=== CMA-ES MAX ===")
-	run_multiple_seeds(cma_es_max_search, f, domain, runs)
+	run_optimizer_benchmark(
+		"Differential Evolution",
+		differential_evolution_max_search,
+		f, domain, runs, results
+	)
+
+	run_optimizer_benchmark(
+		"CMA-ES",
+		cma_es_max_search,
+		f, domain, runs, results
+	)
+
+	print_final_comparison(results)
 
 
 # main function execution
