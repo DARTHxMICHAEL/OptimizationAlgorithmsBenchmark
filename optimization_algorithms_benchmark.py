@@ -242,6 +242,70 @@ def evolution_strategy_max_search(f, domain, mu=5, lam=20, generations=200, sigm
 	return best_parent[0], best_parent[1], f(best_parent[0], best_parent[1])
 
 
+def differential_evolution_max_search(f, domain, pop_size=20, generations=300, F=0.8, CR=0.9, seed=0, debug=False):
+	rng = np.random.default_rng(seed)
+
+	pop = rng.uniform(-(domain/2), domain/2, size=(pop_size, 2))
+	fitness = np.array([f(x, y) for x, y in pop])
+
+	for _ in range(generations):
+		for i in range(pop_size):
+			idxs = rng.choice([j for j in range(pop_size) if j != i], size=3, replace=False)
+			a, b, c = pop[idxs]
+
+			mutant = a + F * (b - c)
+			mutant = np.clip(mutant, -(domain/2), domain/2)
+
+			cross = rng.random(2) < CR
+			if not np.any(cross):
+				cross[rng.integers(0, 2)] = True
+
+			trial = np.where(cross, mutant, pop[i])
+			val = f(trial[0], trial[1])
+
+			if val > fitness[i]:
+				pop[i] = trial
+				fitness[i] = val
+
+	best_idx = np.argmax(fitness)
+	best = pop[best_idx]
+
+	if debug:
+		print("\nDifferential Evolution MAX:")
+		print(f"Global MAX at (x={best[0]:.4f}, y={best[1]:.4f}) = {fitness[best_idx]:.6f}")
+
+	return best[0], best[1], fitness[best_idx]
+
+
+def cma_es_max_search(f, domain, pop_size=20, generations=200, sigma=0.5, seed=0, debug=False):
+	rng = np.random.default_rng(seed)
+
+	mean = rng.uniform(-(domain/2), domain/2, size=2)
+	cov = np.eye(2)
+
+	for _ in range(generations):
+		samples = rng.multivariate_normal(mean, cov * sigma**2, size=pop_size)
+		samples = np.clip(samples, -(domain/2), domain/2)
+
+		fitness = np.array([f(x, y) for x, y in samples])
+		idx = np.argsort(fitness)[-pop_size//2:]
+
+		elite = samples[idx]
+		mean = np.mean(elite, axis=0)
+		cov = np.cov(elite.T) + 1e-6 * np.eye(2)
+
+		sigma *= 0.99
+
+	best = max(elite, key=lambda p: f(p[0], p[1]))
+	best_val = f(best[0], best[1])
+
+	if debug:
+		print("\nCMA-ES MAX:")
+		print(f"Global MAX at (x={best[0]:.4f}, y={best[1]:.4f}) = {best_val:.6f}")
+
+	return best[0], best[1], best_val
+
+
 # END OF OPTIMIZATION ALGORITHMS SECTION
 
 def run_multiple_seeds(optimizer, f, domain, runs=10):
@@ -344,6 +408,14 @@ def run_simulation(seed=0, n_terms=5, domain=50, step=0.01, runs=10):
 	# evolution strategy optimization algorithm
 	print("\n=== Evolution Strategy MAX ===")
 	run_multiple_seeds(evolution_strategy_max_search, f, domain, runs)
+
+	# differential evolution optimization algorithm
+	print("\n=== Differential Evolution MAX ===")
+	run_multiple_seeds(differential_evolution_max_search, f, domain, runs)
+
+	# cma-es optimization algorithm
+	print("\n=== CMA-ES MAX ===")
+	run_multiple_seeds(cma_es_max_search, f, domain, runs)
 
 
 # main function execution
