@@ -168,7 +168,7 @@ def evolution_strategy_max_search(f, domain, mu=5, lam=20, generations=200, sigm
 	return best_parent[0], best_parent[1], f(best_parent[0], best_parent[1])
 
 
-def differential_evolution_max_search(f, domain, pop_size=20, generations=300, F=0.8, CR=0.9, seed=0, debug=False):
+def differential_evolution_max_search(f, domain, pop_size=20, generations=200, F=0.8, CR=0.9, seed=0, debug=False):
 	rng = np.random.default_rng(seed)
 
 	pop = rng.uniform(-(domain/2), domain/2, size=(pop_size, 2))
@@ -204,26 +204,110 @@ def differential_evolution_max_search(f, domain, pop_size=20, generations=300, F
 
 
 def cma_es_max_search(f, domain, pop_size=20, generations=200, sigma=0.5, seed=0, debug=False):
+
+	if pop_size < 4:
+		raise ValueError("CMA-ES requires pop_size >= 4")
+
 	rng = np.random.default_rng(seed)
 
-	mean = rng.uniform(-(domain/2), domain/2, size=2)
-	cov = np.eye(2)
+	dim = 2
+	bounds = domain / 2
 
-	for _ in range(generations):
-		samples = rng.multivariate_normal(mean, cov * sigma**2, size=pop_size)
-		samples = np.clip(samples, -(domain/2), domain/2)
+	# --- strategy parameters ---
+	lam = pop_size
+	mu = lam // 2
 
-		fitness = np.array([f(x, y) for x, y in samples])
-		idx = np.argsort(fitness)[-pop_size//2:]
+	weights = np.log(mu + 0.5) - np.log(np.arange(1, mu + 1))
+	weights /= np.sum(weights)
+	mu_eff = 1 / np.sum(weights**2)
+
+	# --- learning rates ---
+	c_sigma = (mu_eff + 2) / (dim + mu_eff + 5)
+	d_sigma = 1 + 2 * max(0, np.sqrt((mu_eff - 1) / (dim + 1)) - 1) + c_sigma
+	c_c = (4 + mu_eff / dim) / (dim + 4 + 2 * mu_eff / dim)
+	c1 = 2 / ((dim + 1.3)**2 + mu_eff)
+	c_mu = min(
+		1 - c1,
+		2 * (mu_eff - 2 + 1 / mu_eff) / ((dim + 2)**2 + mu_eff)
+	)
+
+	# --- initialization ---
+	mean = rng.uniform(-bounds, bounds, size=dim)
+	C = np.eye(dim)
+	p_sigma = np.zeros(dim)
+	p_c = np.zeros(dim)
+
+	eigvals = np.ones(dim)
+	B = np.eye(dim)
+	D = np.ones(dim)
+	inv_sqrt_C = np.eye(dim)
+
+	chi_n = np.sqrt(dim) * (1 - 1 / (4 * dim) + 1 / (21 * dim**2))
+
+	best = None
+	best_val = -np.inf
+
+	for gen in range(generations):
+		# --- sample population ---
+		z_samples = rng.standard_normal((lam, dim))
+		samples = mean + sigma * (z_samples @ (B * D).T)
+
+		# boundary repair (projection)
+		samples = np.clip(samples, -bounds, bounds)
+
+		samples = np.array(samples)
+		z_samples = np.array(z_samples)
+
+		# --- evaluate fitness ---
+		fitness = np.array([f(x[0], x[1]) for x in samples])
+		idx = np.argsort(fitness)[-mu:]
 
 		elite = samples[idx]
-		mean = np.mean(elite, axis=0)
-		cov = np.cov(elite.T) + 1e-6 * np.eye(2)
+		z_elite = z_samples[idx]
 
-		sigma *= 0.99
+		# --- track currently best ---
+		if fitness[idx[-1]] > best_val:
+			best_val = fitness[idx[-1]]
+			best = elite[-1]
 
-	best = max(elite, key=lambda p: f(p[0], p[1]))
-	best_val = f(best[0], best[1])
+		old_mean = mean.copy()
+
+		# --- recombination ---
+		mean = np.sum(elite * weights[:, None], axis=0)
+		z_mean = np.sum(z_elite * weights[:, None], axis=0)
+
+		# --- step-size adaptation (with overflow preventing clamp) ---
+		p_sigma = (1 - c_sigma) * p_sigma + np.sqrt(c_sigma * (2 - c_sigma) * mu_eff) * (inv_sqrt_C @ z_mean)
+		
+		exponent = (np.linalg.norm(p_sigma) / chi_n - 1) * c_sigma / d_sigma
+		exponent = np.clip(exponent, -5.0, 5.0)
+		sigma *= np.exp(exponent)
+
+		# --- prevent sigma outside the domain
+		sigma = np.clip(sigma, 1e-8, bounds)
+
+		# --- covariance adaptation ---
+		h_sigma = np.linalg.norm(p_sigma) / np.sqrt(1 - (1 - c_sigma)**(2 * (gen + 1))) < (1.4 + 2 / (dim + 1)) * chi_n
+		p_c = (1 - c_c) * p_c + h_sigma * np.sqrt(c_c * (2 - c_c) * mu_eff) * (mean - old_mean) / sigma
+
+		rank_one = np.outer(p_c, p_c)
+		rank_mu = np.zeros((dim, dim))
+		for i in range(mu):
+			diff = (elite[i] - old_mean) / sigma
+			rank_mu += weights[i] * np.outer(diff, diff)
+
+		C = (
+			(1 - c1 - c_mu) * C
+			+ c1 * rank_one
+			+ c_mu * rank_mu
+		)
+
+		# --- eigen decomposition (periodic) ---
+		if gen % 10 == 0:
+			eigvals, B = np.linalg.eigh(C)
+			eigvals = np.maximum(eigvals, 1e-12)
+			D = np.sqrt(eigvals)
+			inv_sqrt_C = B @ np.diag(1 / D) @ B.T
 
 	if debug:
 		print("\nCMA-ES MAX:")
