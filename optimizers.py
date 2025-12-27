@@ -1,4 +1,4 @@
-def hill_climb_max_search(f, domain, iterations=2000, step_size=0.1, seed=0, debug=False):
+def hill_climb_max_search(f, domain, iterations=4000, step_size=0.1, seed=0, debug=False):
 	"""
 	Simple stochastic hill-climbing search for a local maximum.
 	"""
@@ -24,7 +24,7 @@ def hill_climb_max_search(f, domain, iterations=2000, step_size=0.1, seed=0, deb
 	return x, y, f(x, y)
 
 
-def random_restart_hill_climb_max_search(f, domain, restarts=10, iterations=2000, step_size=0.1, seed=0, debug=False):
+def random_restart_hill_climb_max_search(f, domain, restarts=10, iterations=400, step_size=0.1, seed=0, debug=False):
 	"""
 	Random-restart hill climbing for global maximization.
 	"""
@@ -58,7 +58,7 @@ def random_restart_hill_climb_max_search(f, domain, restarts=10, iterations=2000
 	return x, y, f(x, y)
 
 
-def momentum_max_search(f, domain, lr=0.01, momentum=0.9, steps=2000, seed=0, eps=1e-4, debug=False):
+def momentum_max_search(f, domain, lr=0.01, momentum=0.9, steps=4000, seed=0, eps=1e-4, debug=False):
 	"""
 	Gradient-free momentum-based local maximization.
 	Uses finite-difference gradient estimates.
@@ -92,7 +92,7 @@ def momentum_max_search(f, domain, lr=0.01, momentum=0.9, steps=2000, seed=0, ep
 	return x, y, f(x, y)
 
 
-def simulated_annealing_max_search(f, domain, start_temp=1.0, end_temp=1e-3, steps=5000, step_scale=0.5, seed=0, debug=False):
+def simulated_annealing_max_search(f, domain, start_temp=1.0, end_temp=1e-3, steps=4000, step_scale=0.5, seed=0, debug=False):
 	"""
 	Simulated annealing search for a global maximum.
 	"""
@@ -278,7 +278,7 @@ def cma_es_max_search(f, domain, pop_size=20, generations=200, sigma=0.5, seed=0
 
 		# --- step-size adaptation (with overflow preventing clamp) ---
 		p_sigma = (1 - c_sigma) * p_sigma + np.sqrt(c_sigma * (2 - c_sigma) * mu_eff) * (inv_sqrt_C @ z_mean)
-		
+
 		exponent = (np.linalg.norm(p_sigma) / chi_n - 1) * c_sigma / d_sigma
 		exponent = np.clip(exponent, -5.0, 5.0)
 		sigma *= np.exp(exponent)

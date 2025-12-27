@@ -3,13 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from optimizers import (
-    hill_climb_max_search,
-    random_restart_hill_climb_max_search,
-    momentum_max_search,
-    simulated_annealing_max_search,
-    evolution_strategy_max_search,
-    differential_evolution_max_search,
-    cma_es_max_search,
+	hill_climb_max_search,
+	random_restart_hill_climb_max_search,
+	momentum_max_search,
+	simulated_annealing_max_search,
+	evolution_strategy_max_search,
+	differential_evolution_max_search,
+	cma_es_max_search,
 )
 
 
@@ -57,28 +57,71 @@ def generate_random_surface(seed, n_terms, domain):
 
 def brute_force_min_max_search(f, domain):
 	"""
-	Simple brute force search for min and max value using dynamic value step.
+	Brute force global search with hill-climb refinement
+	applied to the top 1% elite candidates.
 	"""
-	step = domain/100
-	brute_xs = np.arange(-(domain/2), domain/2, step)
-	brute_ys = np.arange(-(domain/2), domain/2, step)
+	step = domain / 100
+	xs = np.arange(-domain / 2, domain / 2, step)
+	ys = np.arange(-domain / 2, domain / 2, step)
 
-	global_min = (None, None, float("inf"))   # (x, y, value)
-	global_max = (None, None, -float("inf"))   # (x, y, value)
+	records = []
 
-	for x in brute_xs:
-		for y in brute_ys:
-			val = f(x, y)
+	for x in xs:
+		for y in ys:
+			records.append((x, y, f(x, y)))
 
-			if val < global_min[2]:
-				global_min = (x, y, val)
+	records = np.array(records, dtype=object)
 
-			if val > global_max[2]:
-				global_max = (x, y, val)
+	values = records[:, 2].astype(float)
+	elite_size = max(1, int(0.01 * len(records)))
 
-	print("\n==== Brute Force Global Search Results ====")
-	print(f"Global MIN at (x={global_min[0]:.4f}, y={global_min[1]:.4f}) = {global_min[2]:.6f}")
-	print(f"Global MAX at (x={global_max[0]:.4f}, y={global_max[1]:.4f}) = {global_max[2]:.6f}")
+	# --- elite selection ---
+	min_elite_idx = np.argsort(values)[:elite_size]
+	max_elite_idx = np.argsort(values)[-elite_size:]
+
+	min_elite = records[min_elite_idx]
+	max_elite = records[max_elite_idx]
+
+	def hill_climb(x0, y0, step, maximize):
+		x, y = x0, y0
+		current = f(x, y)
+
+		improved = True
+		while improved:
+			improved = False
+			for dx, dy in [
+				( step, 0), (-step, 0),
+				(0,  step), (0, -step)
+			]:
+				xn = np.clip(x + dx, -domain / 2, domain / 2)
+				yn = np.clip(y + dy, -domain / 2, domain / 2)
+				val = f(xn, yn)
+
+				if (maximize and val > current) or (not maximize and val < current):
+					x, y, current = xn, yn, val
+					improved = True
+
+		return x, y, current
+
+	refined_min = [
+		hill_climb(x, y, step, maximize=False)
+		for x, y, _ in min_elite
+	]
+
+	refined_max = [
+		hill_climb(x, y, step, maximize=True)
+		for x, y, _ in max_elite
+	]
+
+	# --- final selection ---
+	best_min = min(refined_min, key=lambda t: t[2])
+	best_max = max(refined_max, key=lambda t: t[2])
+
+	print("\n==== Brute Force + Elite Hill Climb Results ====")
+	print(f"Global MIN at (x={best_min[0]:.4f}, y={best_min[1]:.4f}) = {best_min[2]:.6f}")
+	print(f"Global MAX at (x={best_max[0]:.4f}, y={best_max[1]:.4f}) = {best_max[2]:.6f}")
+
+	return best_min, best_max
 
 
 def run_multiple_seeds(optimizer, f, domain, runs=10):
@@ -150,7 +193,7 @@ def print_final_comparison(results):
 	"""
 	print("\n================ FINAL ALGORITHM COMPARISON ================\n")
 
-	header = f"{'Algorithm':<28} {'Avg':>10} {'Std':>10} {'Min':>10} {'Max':>10} {'Total Time (s)':>16}"
+	header = f"{'Algorithm':<28} {'Avg':>10} {'Std':>10} {'Min':>10} {'Max':>10} {'Sum':>10} {'Total Time (s)':>16}"
 	print(header)
 	print("-" * len(header))
 
@@ -161,12 +204,33 @@ def print_final_comparison(results):
 			f"{r['std']:>10.4f} "
 			f"{r['min']:>10.4f} "
 			f"{r['max']:>10.4f} "
+			f"{r['sum']:>10.4f} "
 			f"{r['total_time']:>16.4f}"
+		)
+
+	# ---------------- time efficiency score computation ----------------
+
+	total = [r["sum"] for r in results.values()]
+	times = [r["total_time"] for r in results.values()]
+
+	efficiency_scores = []
+
+	for name, r in results.items():
+		efficiency_scores.append((name, (r["sum"]/r["total_time"])))
+
+	max_efficiency_score = [max(i) for i in zip(*efficiency_scores)][1] 
+	efficiency_scores.sort(key=lambda x: x[1], reverse=True)
+
+	print("\n============= TIME EFFICIENCY SCORE (normalized sum/total_time) =============")
+	for rank, (name, score) in enumerate(efficiency_scores, start=1):
+		print(
+			f"{rank:>2}. {name:<25} "
+			f"Score={score:.4f} "
+			f"Normalized Score={score/max_efficiency_score:.4f} "
 		)
 
 	# ---------------- composite score computation ----------------
 
-	# extract ranges for normalization
 	avgs = [r["avg"] for r in results.values()]
 	maxs = [r["max"] for r in results.values()]
 	mins = [r["min"] for r in results.values()]
@@ -179,7 +243,7 @@ def print_final_comparison(results):
 	max_std = max(stds)
 	max_time = max(times)
 
-	scored = []
+	composite_scores = []
 
 	for name, r in results.items():
 		# quality metrics (higher is better)
@@ -202,12 +266,12 @@ def print_final_comparison(results):
 			0.15 * time_score
 		)
 
-		scored.append((name, composite, avg_score, stability_score, time_score))
+		composite_scores.append((name, composite, avg_score, stability_score, time_score))
 
-	scored.sort(key=lambda x: x[1], reverse=True)
+	composite_scores.sort(key=lambda x: x[1], reverse=True)
 
-	print("\n================ RANKED COMPOSITE SCORE ====================")
-	for rank, (name, score, q, s, t) in enumerate(scored, start=1):
+	print("\n============= RANKED COMPOSITE SCORE (avg_score 45%, max_score 15%, min_score 10%, stability_score 15%, time_score 15%) =============")
+	for rank, (name, score, q, s, t) in enumerate(composite_scores, start=1):
 		print(
 			f"{rank:>2}. {name:<25} "
 			f"Score={score:.4f} "
