@@ -321,6 +321,24 @@ def run_simulation(seed=0, n_terms=5, domain=50, step=0.01, runs=10):
 	results = {}
 
 	run_optimizer_benchmark(
+		"Linear Gradient",
+		linear_gradient_max_search,
+		f, domain, runs, results
+	)
+
+	run_optimizer_benchmark(
+		"Analytic Hierarchy Process",
+		ahp_max_search,
+		f, domain, runs, results
+	)
+
+	run_optimizer_benchmark(
+		"Greedy Graph",
+		graph_greedy_max_search,
+		f, domain, runs, results
+	)
+
+	run_optimizer_benchmark(
 		"Hill Climb",
 		hill_climb_max_search,
 		f, domain, runs, results

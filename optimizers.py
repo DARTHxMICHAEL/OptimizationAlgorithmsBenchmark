@@ -1,3 +1,125 @@
+def linear_gradient_max_search(f, domain, seed=0, debug=False, iterations=500, lr=0.05, eps=1e-4):
+	"""
+	Linear (first-order) maximization using finite - difference gradient ascent.
+	"""
+
+	rng = np.random.default_rng(seed)
+
+	x = rng.uniform(-(domain / 2), domain / 2)
+	y = rng.uniform(-(domain / 2), domain / 2)
+
+	for _ in range(iterations):
+		fx = f(x, y)
+
+		# finite-difference gradients
+		dfdx = (f(x + eps, y) - fx) / eps
+		dfdy = (f(x, y + eps) - fx) / eps
+
+		x += lr * dfdx
+		y += lr * dfdy
+
+		x = np.clip(x, -(domain / 2), domain / 2)
+		y = np.clip(y, -(domain / 2), domain / 2)
+
+	best_val = f(x, y)
+
+	if debug:
+		print("\nLinear Gradient MAX:")
+		print(f"Local MAX at (x={x:.4f}, y={y:.4f}) = {best_val:.6f}")
+
+	return x, y, best_val
+
+
+def ahp_max_search(f, domain, seed=0, debug=False, samples=25, preference_eps=1e-6):
+	"""
+	Analytical Hierarchy Process - inspired maximization using discrete sampling and pairwise dominance.
+	"""
+
+	rng = np.random.default_rng(seed)
+
+	# sample candidate points
+	points = rng.uniform(
+		-(domain / 2), domain / 2,
+		size=(samples, 2)
+	)
+
+	values = np.array([f(x, y) for x, y in points])
+
+	# pairwise comparison matrix
+	A = np.ones((samples, samples))
+
+	for i in range(samples):
+		for j in range(samples):
+			if i != j:
+				A[i, j] = (values[i] + preference_eps) / (values[j] + preference_eps)
+
+	# principal eigenvector (priority vector)
+	eigvals, eigvecs = np.linalg.eig(A)
+	max_idx = np.argmax(np.real(eigvals))
+	priorities = np.real(eigvecs[:, max_idx])
+	priorities /= priorities.sum()
+
+	best_idx = np.argmax(priorities)
+	x_best, y_best = points[best_idx]
+	best_val = values[best_idx]
+
+	if debug:
+		print("\nAHP-based MAX:")
+		print(f"Best candidate (x={x_best:.4f}, y={y_best:.4f}) = {best_val:.6f}")
+
+	return x_best, y_best, best_val
+
+
+def graph_greedy_max_search(f, domain, seed=0, debug=False, grid_size=50, max_steps=500):
+	"""
+	Graph - based maximization using greedy ascent on a discretized grid graph.
+	"""
+
+	rng = np.random.default_rng(seed)
+
+	# create grid
+	xs = np.linspace(-(domain / 2), domain / 2, grid_size)
+	ys = np.linspace(-(domain / 2), domain / 2, grid_size)
+
+	# random start node
+	i = rng.integers(0, grid_size)
+	j = rng.integers(0, grid_size)
+
+	def neighbors(i, j):
+		for di, dj in [(-1, 0), (1, 0), (0, -1), (0, 1),
+					   (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+			ni, nj = i + di, j + dj
+			if 0 <= ni < grid_size and 0 <= nj < grid_size:
+				yield ni, nj
+
+	current_val = f(xs[i], ys[j])
+
+	for _ in range(max_steps):
+		best_i, best_j = i, j
+		best_val = current_val
+
+		for ni, nj in neighbors(i, j):
+			val = f(xs[ni], ys[nj])
+			if val > best_val:
+				best_i, best_j = ni, nj
+				best_val = val
+
+		if best_val <= current_val:
+			break
+
+		i, j = best_i, best_j
+		current_val = best_val
+
+	x_best = xs[i]
+	y_best = ys[j]
+
+	if debug:
+		print("\nGraph Greedy MAX:")
+		print(f"Graph MAX at (x={x_best:.4f}, y={y_best:.4f}) = {current_val:.6f}")
+
+	return x_best, y_best, current_val
+	
+
 def hill_climb_max_search(f, domain, iterations=4000, step_size=0.1, seed=0, debug=False):
 	"""
 	Simple stochastic hill-climbing search for a local maximum.
