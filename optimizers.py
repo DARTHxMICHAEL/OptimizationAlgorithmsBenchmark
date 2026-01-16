@@ -180,23 +180,27 @@ def random_restart_hill_climb_max_search(f, domain, restarts=10, iterations=400,
 	return x, y, f(x, y)
 
 
-def momentum_max_search(f, domain, lr=0.01, momentum=0.9, steps=4000, seed=0, eps=1e-4, debug=False):
+def momentum_max_search(f, domain,lr=0.01, momentum=0.9, steps=4000, seed=0,eps=1e-4, debug=False):
 	"""
 	Gradient-free momentum-based local maximization.
 	Uses finite-difference gradient estimates.
+	Tracks and returns the best point encountered.
 	"""
 	rng = np.random.default_rng(seed)
 
-	x = rng.uniform(-(domain/2), domain/2)
-	y = rng.uniform(-(domain/2), domain/2)
+	x = rng.uniform(-(domain / 2), domain / 2)
+	y = rng.uniform(-(domain / 2), domain / 2)
 
 	vx, vy = 0.0, 0.0
 
 	def estimate_grad(x, y):
 		h = eps
-		dx = (f(x + h, y) - f(x - h, y)) / (2*h)
-		dy = (f(x, y + h) - f(x, y - h)) / (2*h)
+		dx = (f(x + h, y) - f(x - h, y)) / (2 * h)
+		dy = (f(x, y + h) - f(x, y - h)) / (2 * h)
 		return dx, dy
+
+	best_x, best_y = x, y
+	best_val = f(x, y)
 
 	for _ in range(steps):
 		gx, gy = estimate_grad(x, y)
@@ -204,14 +208,21 @@ def momentum_max_search(f, domain, lr=0.01, momentum=0.9, steps=4000, seed=0, ep
 		vx = momentum * vx + lr * gx
 		vy = momentum * vy + lr * gy
 
-		x = np.clip(x + vx, -(domain/2), domain/2)
-		y = np.clip(y + vy, -(domain/2), domain/2)
+		x = np.clip(x + vx, -(domain / 2), domain / 2)
+		y = np.clip(y + vy, -(domain / 2), domain / 2)
 
-	if(debug):
+		val = f(x, y)
+		if val > best_val:
+			best_x, best_y, best_val = x, y, val
+
+	if debug:
 		print("\nMomentum MAX:")
-		print(f"Local MAX at (x={x:.4f}, y={y:.4f}) = {f(x,y):.6f}")
+		print(
+			f"Best MAX at (x={best_x:.4f}, y={best_y:.4f}) "
+			f"= {best_val:.6f}"
+		)
 
-	return x, y, f(x, y)
+	return best_x, best_y, best_val
 
 
 def simulated_annealing_max_search(f, domain, start_temp=1.0, end_temp=1e-3, steps=4000, step_scale=0.5, seed=0, debug=False):
