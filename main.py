@@ -3,13 +3,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from optimizers import (
+	linear_gradient_max_search,
+	ahp_max_search,
+	graph_greedy_max_search,
 	hill_climb_max_search,
 	random_restart_hill_climb_max_search,
 	momentum_max_search,
 	simulated_annealing_max_search,
 	evolution_strategy_max_search,
 	differential_evolution_max_search,
-	cma_es_max_search,
+	cma_es_max_search
 )
 
 

@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def linear_gradient_max_search(f, domain, seed=0, debug=False, iterations=500, lr=0.05, eps=1e-4):
 	"""
 	Linear (first-order) maximization using finite - difference gradient ascent.
