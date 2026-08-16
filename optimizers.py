@@ -180,7 +180,7 @@ def random_restart_hill_climb_max_search(f, domain, restarts=10, iterations=400,
 		print("\nRandom Restart Hill Climb MAX:")
 		print(f"Global MAX at (x={best_global[0]:.4f}, y={best_global[1]:.4f}) = {best_global[2]:.6f}")
 
-	return x, y, f(x, y)
+	return best_global
 
 
 def momentum_max_search(f, domain,lr=0.01, momentum=0.9, steps=4000, seed=0,eps=1e-4, debug=False):
@@ -290,7 +290,7 @@ def evolution_strategy_max_search(f, domain, mu=5, lam=20, generations=200, sigm
 		offspring = np.array(offspring)
 		fitness = np.array([f(x, y) for x, y in offspring])
 
-		best_idx = np.argsort(fitness)[-mu:]
+		best_idx = np.argsort(fitness, kind="stable")[-mu:]
 		parents = offspring[best_idx]
 
 		sigma *= 0.99
@@ -396,7 +396,7 @@ def cma_es_max_search(f, domain, pop_size=20, generations=200, sigma=0.5, seed=0
 
 		# --- evaluate fitness ---
 		fitness = np.array([f(x[0], x[1]) for x in samples])
-		idx = np.argsort(fitness)[-mu:]
+		idx = np.argsort(fitness, kind="stable")[-mu:]
 
 		elite = samples[idx]
 		z_elite = z_samples[idx]

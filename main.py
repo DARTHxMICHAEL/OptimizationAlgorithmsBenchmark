@@ -79,8 +79,8 @@ def brute_force_min_max_search(f, domain):
 	elite_size = max(1, int(0.01 * len(records)))
 
 	# --- elite selection ---
-	min_elite_idx = np.argsort(values)[:elite_size]
-	max_elite_idx = np.argsort(values)[-elite_size:]
+	min_elite_idx = np.argsort(values, kind="stable")[:elite_size]
+	max_elite_idx = np.argsort(values, kind="stable")[-elite_size:]
 
 	min_elite = records[min_elite_idx]
 	max_elite = records[max_elite_idx]
@@ -247,6 +247,7 @@ def print_final_comparison(results):
 	max_time = max(times)
 
 	composite_scores = []
+	composite_scores_time_independent = []
 
 	for name, r in results.items():
 		# quality metrics (higher is better)
@@ -262,24 +263,41 @@ def print_final_comparison(results):
 		time_score = 1.0 - (r["total_time"] / max_time)
 
 		composite = (
-			0.45 * avg_score +
+			0.40 * avg_score +
 			0.15 * max_score +
-			0.10 * min_score +
+			0.15 * min_score +
 			0.15 * stability_score +
 			0.15 * time_score
 		)
 
+		composite_time_independent = (
+			0.50 * avg_score +
+			0.15 * max_score +
+			0.15 * min_score +
+			0.20 * stability_score
+		)
+
 		composite_scores.append((name, composite, avg_score, stability_score, time_score))
+		composite_scores_time_independent.append((name, composite_time_independent, avg_score, stability_score))
 
 	composite_scores.sort(key=lambda x: x[1], reverse=True)
+	composite_scores_time_independent.sort(key=lambda x: x[1], reverse=True)
 
-	print("\n============= RANKED COMPOSITE SCORE (avg_score 45%, max_score 15%, min_score 10%, stability_score 15%, time_score 15%) =============")
+	print("\n============= RANKED COMPOSITE SCORE (avg_score 40%, max_score 15%, min_score 15%, stability_score 15%, time_score 15%) =============")
 	for rank, (name, score, q, s, t) in enumerate(composite_scores, start=1):
 		print(
 			f"{rank:>2}. {name:<25} "
 			f"Score={score:.4f} "
 			f"(Quality={q:.3f}, Stability={s:.3f}, Time={t:.3f})"
 		)
+
+	print("\n============= RANKED COMPOSITE SCORE - TIME INDEPENDENT (avg_score 50%, max_score 15%, min_score 15%, stability_score 20%) =============")
+	for rank, (name, score, q, s) in enumerate(composite_scores_time_independent, start=1):
+			print(
+				f"{rank:>2}. {name:<25} "
+				f"Score={score:.4f} "
+				f"(Quality={q:.3f}, Stability={s:.3f})"
+			)
 
 
 def run_simulation(seed=0, n_terms=5, domain=50, step=0.01, runs=10):
