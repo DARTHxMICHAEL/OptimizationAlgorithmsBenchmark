@@ -58,6 +58,16 @@ def generate_random_surface(seed, n_terms, domain):
 	return f
 
 
+class EvaluationCounter:
+	def __init__(self, f):
+		self.f = f
+		self.count = 0
+
+	def __call__(self, x, y):
+		self.count += 1
+		return self.f(x, y)
+
+
 def brute_force_min_max_search(f, domain):
 	"""
 	Brute force global search with hill-climb refinement
@@ -134,16 +144,20 @@ def run_multiple_seeds(optimizer, f, domain, runs=10):
 	"""
 	values = []
 	run_times = []
+	evaluation_counts = []
 
 	total_start = time.perf_counter()
 
 	for seed in range(runs):
+		counted_f = EvaluationCounter(f)
+
 		t0 = time.perf_counter()
-		_, _, best_val = optimizer(f, domain, seed=seed)
+		_, _, best_val = optimizer(counted_f, domain, seed=seed)
 		t1 = time.perf_counter()
 
 		values.append(best_val)
 		run_times.append(t1 - t0)
+		evaluation_counts.append(counted_f.count)
 
 	total_end = time.perf_counter()
 
@@ -152,6 +166,10 @@ def run_multiple_seeds(optimizer, f, domain, runs=10):
 	std = float(np.std(values))
 	vmin = float(np.min(values))
 	vmax = float(np.max(values))
+
+	avg_evaluations = float(np.mean(evaluation_counts))
+	min_evaluations = int(np.min(evaluation_counts))
+	max_evaluations = int(np.max(evaluation_counts))
 
 	fastest = float(np.min(run_times))
 	slowest = float(np.max(run_times))
@@ -169,6 +187,11 @@ def run_multiple_seeds(optimizer, f, domain, runs=10):
 	print(f"Slowest run:   {slowest:.6f} s")
 	print(f"Total time:    {total_time:.6f} s")
 
+	print("\n=== Function Evaluations ===")
+	print(f"Average:       {avg_evaluations:.2f}")
+	print(f"Min:           {min_evaluations}")
+	print(f"Max:           {max_evaluations}")
+
 	return {
 		"sum": total,
 		"avg": avg,
@@ -177,7 +200,10 @@ def run_multiple_seeds(optimizer, f, domain, runs=10):
 		"max": vmax,
 		"fastest": fastest,
 		"slowest": slowest,
-		"total_time": total_time
+		"total_time": total_time,
+		"avg_evaluations": avg_evaluations,
+		"min_evaluations": min_evaluations,
+		"max_evaluations": max_evaluations
 	}
 
 
@@ -239,12 +265,14 @@ def print_final_comparison(results):
 	mins = [r["min"] for r in results.values()]
 	stds = [r["std"] for r in results.values()]
 	times = [r["total_time"] for r in results.values()]
+	avg_evaluations = [r["avg_evaluations"] for r in results.values()]
 
 	max_avg = max(avgs)
 	max_max = max(maxs)
 	max_min = max(mins)
 	max_std = max(stds)
 	max_time = max(times)
+	max_evaluations = max(avg_evaluations)
 
 	composite_scores = []
 	composite_scores_time_independent = []
@@ -262,6 +290,9 @@ def print_final_comparison(results):
 		# time metric (lower is better)
 		time_score = 1.0 - (r["total_time"] / max_time)
 
+		# evaluation metric (lower is better)
+		evaluation_score = 1.0 - (r["avg_evaluations"] / max_evaluations)
+
 		composite = (
 			0.40 * avg_score +
 			0.15 * max_score +
@@ -271,14 +302,15 @@ def print_final_comparison(results):
 		)
 
 		composite_time_independent = (
-			0.50 * avg_score +
+			0.40 * avg_score +
 			0.15 * max_score +
 			0.15 * min_score +
-			0.20 * stability_score
+			0.15 * stability_score +
+			0.15 * evaluation_score
 		)
 
 		composite_scores.append((name, composite, avg_score, stability_score, time_score))
-		composite_scores_time_independent.append((name, composite_time_independent, avg_score, stability_score))
+		composite_scores_time_independent.append((name, composite_time_independent, avg_score, stability_score, evaluation_score))
 
 	composite_scores.sort(key=lambda x: x[1], reverse=True)
 	composite_scores_time_independent.sort(key=lambda x: x[1], reverse=True)
@@ -291,12 +323,12 @@ def print_final_comparison(results):
 			f"(Quality={q:.3f}, Stability={s:.3f}, Time={t:.3f})"
 		)
 
-	print("\n============= RANKED COMPOSITE SCORE - TIME INDEPENDENT (avg_score 50%, max_score 15%, min_score 15%, stability_score 20%) =============")
-	for rank, (name, score, q, s) in enumerate(composite_scores_time_independent, start=1):
+	print("\n============= RANKED COMPOSITE SCORE - TIME INDEPENDENT (avg_score 40%, max_score 15%, min_score 15%, stability_score 15%, evaluation_score 15%) =============")
+	for rank, (name, score, q, s, e) in enumerate(composite_scores_time_independent, start=1):
 			print(
 				f"{rank:>2}. {name:<25} "
 				f"Score={score:.4f} "
-				f"(Quality={q:.3f}, Stability={s:.3f})"
+				f"(Quality={q:.3f}, Stability={s:.3f}, Evaluation={e:.3f})"
 			)
 
 
